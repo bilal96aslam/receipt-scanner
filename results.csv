@@ -1,0 +1,13 @@
+all_ok,date_ok,detail,expected_date,expected_total,expected_vendor,filename,got_date,got_total,got_vendor,needs_review,seconds,status,total_ok,vendor_ok
+,,HTTP 502,,,,01.png,,,,,51.5,error,,
+False,False,,2025-06-14,12.47,QuickFix Hardware,02.png,2025-03-14,12.47,QuickFix Hardware,False,15.3,ok,True,True
+,,HTTP 502,,,,03.png,,,,,11.6,error,,
+,,HTTP 502,,,,04.png,,,,,10.9,error,,
+,,HTTP 502,,,,05.png,,,,,10.3,error,,
+,,HTTP 502,,,,06.png,,,,,8.9,error,,
+,,HTTP 502,,,,07.png,,,,,8.6,error,,
+,,HTTP 502,,,,08.png,,,,,9.4,error,,
+,,HTTP 502,,,,09.png,,,,,8.7,error,,
+,,HTTP 502,,,,10.png,,,,,8.6,error,,
+,,HTTP 502,,,,11.png,,,,,8.5,error,,
+,,HTTP 502,,,,12.png,,,,,9.2,error,,

@@ -1,0 +1,13 @@
+all_ok,date_ok,expected_date,expected_total,expected_vendor,filename,got_date,got_total,got_vendor,needs_review,seconds,status,total_ok,vendor_ok
+True,True,2025-06-14,12.47,The Wine Cellar,01.png,2025-06-14,12.47,The Wine Cellar,False,28.3,ok,True,True
+False,False,2025-06-14,12.47,QuickFix Hardware,02.png,2025-03-14,12.47,QuickFix Hardware,False,27.3,ok,True,True
+False,False,2025-06-14,12.47,Tokyo Tech Stop,03.png,2023-08-14,12.47,Tokyo Tech Stop,False,30.8,ok,True,True
+False,False,2025-06-14,12.47,Tokyo Tech Stop,04.png,2023-06-14,12.47,Tokyo Tech Stop,False,25.8,ok,True,True
+False,False,2025-06-14,12.47,Gas 'N Go,05.png,2033-05-14,12.47,Gas 'N Go,False,38.7,ok,True,True
+False,False,2025-06-14,12.47,K-Mart Groceries,06.png,2023-03-08,71.47,K-Mart Groceries,False,41.0,ok,False,True
+False,True,2025-06-14,2.50,Burger Bite Express,07.png,2025-06-14,2.59,Burger Bite Express,False,24.1,ok,False,True
+False,False,2025-06-14,12.47,Medi-Save Pharmacy,08.png,2013-06-01,12.47,Medi-Save Pharmacy,False,22.2,ok,True,True
+False,False,2025-06-14,2.87,Daily Grind Cafe,09.png,2025-05-14,2.87,Daily Grind Cafe,False,25.8,ok,True,True
+False,False,2025-06-14,2.90,The Book Nook,10.png,2023-06-14,2.9,The Book Nook,False,39.1,ok,True,True
+True,True,2025-06-14,12.89,Stationery World,11.png,2025-06-14,12.89,Stationery World,False,27.5,ok,True,True
+True,True,2025-06-14,12.47,Global Goods Mart,12.png,2025-06-14,12.47,Global Goods Mart,False,9.5,ok,True,True
