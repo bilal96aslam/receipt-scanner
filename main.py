@@ -121,25 +121,16 @@ async def scan_receipt(file: UploadFile = File(...), _=Depends(require_api_key))
         duration = time.time() - start_time
 
         with Session(engine) as session:
-            receipt = Receipt(
-                vendor=result.vendor,
-                date=result.date,
-                total=result.total,
-                needs_review=needs_review,
-                review_reason=review_reason,
-            )
-            session.add(receipt)
-            session.add(ScanLog(status="success", duration_seconds=duration))
-            session.commit()
-            session.refresh(receipt)
+        session.add(ScanLog(status="success", duration_seconds=duration))
+        session.commit()
 
             return {
-                "id": receipt.id,
-                "vendor": receipt.vendor,
-                "date": receipt.date,
-                "total": receipt.total,
-                "needs_review": receipt.needs_review,
-                "review_reason": receipt.review_reason,
+                "id": None,
+                "vendor": result.vendor,
+                "date": result.date,
+                "total": result.total,
+                "needs_review": needs_review,
+                "review_reason": review_reason,
             }
 
     except Exception as e:
@@ -149,10 +140,26 @@ async def scan_receipt(file: UploadFile = File(...), _=Depends(require_api_key))
             session.commit()
         raise HTTPException(status_code=502, detail=str(e))
 
-@app.get("/receipts")
-def list_receipts(_=Depends(require_api_key)):
+class ConfirmReceipt(BaseModel):
+    vendor: str
+    date: str
+    total: float
+    needs_review: bool = False
+    review_reason: str | None = None
+
+
+@app.post("/receipts")
+def confirm_receipt(data: ConfirmReceipt, _=Depends(require_api_key)):
     with Session(engine) as session:
-        receipts = session.exec(
-            select(Receipt).order_by(Receipt.created_at.desc())
-        ).all()
-        return receipts
+        receipt = Receipt(
+            vendor=data.vendor,
+            date=data.date,
+            total=data.total,
+            needs_review=data.needs_review,
+            review_reason=data.review_reason,
+        )
+        session.add(receipt)
+        session.commit()
+        session.refresh(receipt)
+        return receipt
+
