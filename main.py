@@ -163,3 +163,12 @@ def confirm_receipt(data: ConfirmReceipt, _=Depends(require_api_key)):
         session.refresh(receipt)
         return receipt
 
+
+@app.get("/receipts")
+def list_receipts(_=Depends(require_api_key)):
+    with Session(engine) as session:
+        receipts = session.exec(
+            select(Receipt).order_by(Receipt.created_at.desc())
+        ).all()
+        return receipts
+
