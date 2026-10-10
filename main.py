@@ -121,17 +121,17 @@ async def scan_receipt(file: UploadFile = File(...), _=Depends(require_api_key))
         duration = time.time() - start_time
 
         with Session(engine) as session:
-        session.add(ScanLog(status="success", duration_seconds=duration))
-        session.commit()
+            session.add(ScanLog(status="success", duration_seconds=duration))
+            session.commit()
 
-            return {
-                "id": None,
-                "vendor": result.vendor,
-                "date": result.date,
-                "total": result.total,
-                "needs_review": needs_review,
-                "review_reason": review_reason,
-            }
+        return {
+            "id": None,
+            "vendor": result.vendor,
+            "date": result.date,
+            "total": result.total,
+            "needs_review": needs_review,
+            "review_reason": review_reason,
+        }
 
     except Exception as e:
         duration = time.time() - start_time
