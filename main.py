@@ -172,3 +172,22 @@ def list_receipts(_=Depends(require_api_key)):
         ).all()
         return receipts
 
+@app.get("/receipts/export")
+def export_receipts(_=Depends(require_api_key)):
+    with Session(engine) as session:
+        receipts = session.exec(
+            select(Receipt).order_by(Receipt.created_at.desc())
+        ).all()
+
+    output = io_module.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["ID", "Vendor", "Date", "Total", "Needs Review", "Review Reason", "Created At"])
+    for r in receipts:
+        writer.writerow([r.id, r.vendor, r.date, r.total, r.needs_review, r.review_reason or "", r.created_at])
+
+    output.seek(0)
+    return StreamingResponse(
+        io_module.StringIO(output.getvalue()),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=receipts.csv"}
+    )
