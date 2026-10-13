@@ -14,6 +14,9 @@ from sqlmodel import Session, select
 from fastapi.responses import StreamingResponse
 import csv
 import io as io_module
+import httpx
+
+N8N_WEBHOOK_URL = os.getenv("N8N_WEBHOOK_URL")
 
 load_dotenv()
 key = os.getenv("GEMINI_API_KEY")
@@ -52,9 +55,16 @@ def check_receipt(data: ReceiptData):
     if data.total > 10000:
         reasons.append("total is unusually large")
     try:
-        datetime.strptime(data.date, "%Y-%m-%d")
+        parsed_date = datetime.strptime(data.date, "%Y-%m-%d")
     except ValueError:
         reasons.append("date is not in YYYY-MM-DD format")
+    else:
+        today = datetime.now()
+        if parsed_date > today:
+            reasons.append("date is in the future")
+        elif (today - parsed_date).days > 365 * 3:
+            reasons.append("date is more than 3 years old, check for a misread year")
+    return reasons
     return reasons
 
 
@@ -67,7 +77,9 @@ async def extract_with_retry(uploaded):
                     model=model,
                     contents=[
                         uploaded,
-                        "Extract the vendor name, date (as YYYY-MM-DD), and total amount from this receipt."
+                        "Extract the vendor name, the transaction date, and the total amount from this receipt. "
+                        "Read the date character by character — do not guess based on typical formats. "
+                        "Return the date as YYYY-MM-DD."
                     ],
                     config={
                         "response_mime_type": "application/json",
@@ -164,6 +176,16 @@ def confirm_receipt(data: ConfirmReceipt, _=Depends(require_api_key)):
         session.add(receipt)
         session.commit()
         session.refresh(receipt)
+        if N8N_WEBHOOK_URL:
+            try:
+                httpx.post(N8N_WEBHOOK_URL, json={
+                    "vendor": receipt.vendor,
+                    "date": receipt.date,
+                    "total": receipt.total,
+                    "needs_review": receipt.needs_review,
+                }, timeout=10)
+            except Exception as e:
+                print(f"n8n webhook failed: {e}")
         return receipt
 
 

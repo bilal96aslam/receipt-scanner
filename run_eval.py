@@ -6,6 +6,11 @@ from pathlib import Path
 
 import httpx
 
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
 API_URL = "http://127.0.0.1:8000/scan"
 FOLDER = Path("test_receipts")
 
@@ -29,6 +34,7 @@ for row in expected_rows:
             response = httpx.post(
                 API_URL,
                 files={"file": (path.name, image, mime)},
+                headers={"x-api-key": os.getenv("API_SECRET_KEY")},
                 timeout=180,
             )
     except Exception as e:

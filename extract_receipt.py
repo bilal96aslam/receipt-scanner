@@ -21,11 +21,14 @@ response = client.models.generate_content(
     model="gemini-3.6-flash",
     contents=[
         image_file,
-        "Extract the vendor name, date, and total amount from this receipt."
+        "Extract the vendor name, the transaction date, and the total amount from this receipt. "
+        "Read the date character by character — do not guess based on typical formats. "
+        "Use only the date the purchase was made, not any other date printed on the receipt. "
+        "Return the date as YYYY-MM-DD."
     ],
     config={
         "response_mime_type": "application/json",
-        "response_schema": Receipt,
+        "response_schema": ReceiptData,
     },
 )
 
