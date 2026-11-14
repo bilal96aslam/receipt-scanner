@@ -7,8 +7,18 @@ def utc_now():
     return datetime.now(timezone.utc)
 
 
+class User(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    email: str = Field(unique=True, index=True)
+    password_hash: str
+    created_at: datetime = Field(default_factory=utc_now)
+    daily_calls: int = 0
+    calls_reset_at: datetime = Field(default_factory=utc_now)
+
+
 class Receipt(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="user.id", index=True)
     vendor: str
     date: str
     total: float
@@ -19,6 +29,7 @@ class Receipt(SQLModel, table=True):
 
 class ScanLog(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="user.id", index=True)
     status: str
     error_message: Optional[str] = None
     duration_seconds: float

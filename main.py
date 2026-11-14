@@ -3,7 +3,8 @@ from google import genai
 from google.genai import types
 from dotenv import load_dotenv
 from pydantic import BaseModel
-from database import engine, init_db, Receipt, ScanLog
+from database import engine, init_db, Receipt, ScanLog, User
+from auth import hash_password, verify_password, create_token, decode_token
 from datetime import datetime
 from typing import Optional
 import asyncio
@@ -15,6 +16,7 @@ from fastapi.responses import StreamingResponse
 import csv
 import io as io_module
 import httpx
+from database import engine, init_db, Receipt, ScanLog, User, utc_now
 
 N8N_WEBHOOK_URL = os.getenv("N8N_WEBHOOK_URL")
 
@@ -31,6 +33,7 @@ MODELS = ["gemini-3.6-flash", "gemini-3.7-flash", "gemini-3.1-flash-lite"]
 ATTEMPTS_PER_MODEL = 2
 RETRYABLE_CODES = {500, 503, 504}
 PLACEHOLDERS = {"", "n/a", "na", "none", "unknown", "null", "-"}
+DAILY_CALL_LIMIT = int(os.getenv("DAILY_CALL_LIMIT", "20"))
 
 app = FastAPI()
 
@@ -40,11 +43,50 @@ class ReceiptData(BaseModel):
     date: str
     total: float
 
+class AuthRequest(BaseModel):
+    email: str
+    password: str    
+
 
 def require_api_key(x_api_key: Optional[str] = Header(default=None)):
     if not API_SECRET_KEY or x_api_key != API_SECRET_KEY:
         raise HTTPException(status_code=401, detail="Invalid or missing API key")
 
+def get_current_user(authorization: Optional[str] = Header(default=None)) -> User:
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing or invalid token")
+
+    token = authorization.removeprefix("Bearer ").strip()
+    user_id = decode_token(token)
+    if user_id is None:
+        raise HTTPException(status_code=401, detail="Missing or invalid token")
+
+    with Session(engine) as session:
+        user = session.get(User, user_id)
+        if user is None:
+            raise HTTPException(status_code=401, detail="Missing or invalid token")
+        return user
+
+def check_and_increment_calls(user_id: int):
+    with Session(engine) as session:
+        user = session.get(User, user_id)
+        if user is None:
+            raise HTTPException(status_code=401, detail="Missing or invalid token")
+
+        now = utc_now()
+        if user.calls_reset_at.date() < now.date():
+            user.daily_calls = 0
+            user.calls_reset_at = now
+
+        if user.daily_calls >= DAILY_CALL_LIMIT:
+            raise HTTPException(
+                status_code=429,
+                detail=f"Daily limit of {DAILY_CALL_LIMIT} AI calls reached. Resets tomorrow.",
+            )
+
+        user.daily_calls += 1
+        session.add(user)
+        session.commit()        
 
 def check_receipt(data: ReceiptData):
     reasons = []
@@ -112,7 +154,8 @@ def health():
 
 
 @app.post("/scan")
-async def scan_receipt(file: UploadFile = File(...), _=Depends(require_api_key)):
+async def scan_receipt(file: UploadFile = File(...), user: User = Depends(get_current_user)):
+    check_and_increment_calls(user.id)
     start_time = time.time()
 
 
@@ -136,7 +179,7 @@ async def scan_receipt(file: UploadFile = File(...), _=Depends(require_api_key))
         duration = time.time() - start_time
 
         with Session(engine) as session:
-            session.add(ScanLog(status="success", duration_seconds=duration))
+            session.add(ScanLog(status="success", duration_seconds=duration, user_id=user.id))
             session.commit()
 
         return {
@@ -151,7 +194,7 @@ async def scan_receipt(file: UploadFile = File(...), _=Depends(require_api_key))
     except Exception as e:
         duration = time.time() - start_time
         with Session(engine) as session:
-            session.add(ScanLog(status="failed", error_message=str(e), duration_seconds=duration))
+            session.add(ScanLog(status="failed", error_message=str(e), duration_seconds=duration, user_id=user.id))
             session.commit()
         raise HTTPException(status_code=502, detail=str(e))
 
@@ -164,9 +207,10 @@ class ConfirmReceipt(BaseModel):
 
 
 @app.post("/receipts")
-def confirm_receipt(data: ConfirmReceipt, _=Depends(require_api_key)):
+def confirm_receipt(data: ConfirmReceipt, user: User = Depends(get_current_user)):
     with Session(engine) as session:
         receipt = Receipt(
+            user_id=user.id,
             vendor=data.vendor,
             date=data.date,
             total=data.total,
@@ -188,20 +232,23 @@ def confirm_receipt(data: ConfirmReceipt, _=Depends(require_api_key)):
                 print(f"n8n webhook failed: {e}")
         return receipt
 
-
 @app.get("/receipts")
-def list_receipts(_=Depends(require_api_key)):
+def list_receipts(user: User = Depends(get_current_user)):
     with Session(engine) as session:
         receipts = session.exec(
-            select(Receipt).order_by(Receipt.created_at.desc())
+            select(Receipt)
+            .where(Receipt.user_id == user.id)
+            .order_by(Receipt.created_at.desc())
         ).all()
         return receipts
 
 @app.get("/receipts/export")
-def export_receipts(_=Depends(require_api_key)):
+def export_receipts(user: User = Depends(get_current_user)):
     with Session(engine) as session:
         receipts = session.exec(
-            select(Receipt).order_by(Receipt.created_at.desc())
+            select(Receipt)
+            .where(Receipt.user_id == user.id)
+            .order_by(Receipt.created_at.desc())
         ).all()
 
     output = io_module.StringIO()
@@ -216,3 +263,27 @@ def export_receipts(_=Depends(require_api_key)):
         media_type="text/csv",
         headers={"Content-Disposition": "attachment; filename=receipts.csv"}
     )
+
+@app.post("/register")
+def register(data: AuthRequest):
+    with Session(engine) as session:
+        existing = session.exec(select(User).where(User.email == data.email)).first()
+        if existing:
+            raise HTTPException(status_code=400, detail="Email already registered")
+
+        user = User(email=data.email, password_hash=hash_password(data.password))
+        session.add(user)
+        session.commit()
+        session.refresh(user)
+
+        return {"token": create_token(user.id)}
+
+
+@app.post("/login")
+def login(data: AuthRequest):
+    with Session(engine) as session:
+        user = session.exec(select(User).where(User.email == data.email)).first()
+        if not user or not verify_password(data.password, user.password_hash):
+            raise HTTPException(status_code=401, detail="Invalid email or password")
+
+        return {"token": create_token(user.id)}    
