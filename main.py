@@ -22,7 +22,6 @@ N8N_WEBHOOK_URL = os.getenv("N8N_WEBHOOK_URL")
 
 load_dotenv()
 key = os.getenv("GEMINI_API_KEY")
-API_SECRET_KEY = os.getenv("API_SECRET_KEY")
 
 client = genai.Client(
     api_key=key,
@@ -46,11 +45,6 @@ class ReceiptData(BaseModel):
 class AuthRequest(BaseModel):
     email: str
     password: str    
-
-
-def require_api_key(x_api_key: Optional[str] = Header(default=None)):
-    if not API_SECRET_KEY or x_api_key != API_SECRET_KEY:
-        raise HTTPException(status_code=401, detail="Invalid or missing API key")
 
 def get_current_user(authorization: Optional[str] = Header(default=None)) -> User:
     if not authorization or not authorization.startswith("Bearer "):
