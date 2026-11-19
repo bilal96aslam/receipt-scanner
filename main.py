@@ -17,6 +17,7 @@ import csv
 import io as io_module
 import httpx
 from database import engine, init_db, Receipt, ScanLog, User, utc_now
+from agent import ask_agent
 
 N8N_WEBHOOK_URL = os.getenv("N8N_WEBHOOK_URL")
 
@@ -45,6 +46,9 @@ class ReceiptData(BaseModel):
 class AuthRequest(BaseModel):
     email: str
     password: str    
+
+class AgentRequest(BaseModel):
+    question: str
 
 def get_current_user(authorization: Optional[str] = Header(default=None)) -> User:
     if not authorization or not authorization.startswith("Bearer "):
@@ -281,3 +285,10 @@ def login(data: AuthRequest):
             raise HTTPException(status_code=401, detail="Invalid email or password")
 
         return {"token": create_token(user.id)}    
+
+
+@app.post("/agent")
+def agent_chat(data: AgentRequest, user: User = Depends(get_current_user)):
+    check_and_increment_calls(user.id)
+    answer = ask_agent(data.question, user.id)
+    return {"answer": answer}
