@@ -38,42 +38,60 @@ tools = [
                 required=[]
             )
         ),
+        types.FunctionDeclaration(
+            name="search_receipts",
+            description="Search receipts by vendor name. Use this when the user asks about a specific shop, store, or vendor name.",
+            parameters=types.Schema(
+                type=types.Type.OBJECT,
+                properties={
+                    "keyword": types.Schema(
+                        type=types.Type.STRING,
+                        description="The vendor name or partial name to search for"
+                    )
+                },
+                required=["keyword"]
+            )
+        ),
+
     ])
 ]
 
 
-def run_tool(tool_name: str, user_id: int) -> str:
+def run_tool(tool_name: str, user_id: int, tool_args: dict = {}) -> str:
     if tool_name == "get_receipts":
         with Session(engine) as session:
-            receipts = session.exec(
-                select(Receipt).where(Receipt.user_id == user_id)
-            ).all()
+            receipts = session.exec(select(Receipt).where(Receipt.user_id == user_id)).all()
             if not receipts:
                 return "No receipts found."
             lines = [f"{r.vendor} on {r.date}: ${r.total}" for r in receipts]
             return "\n".join(lines)
-
     if tool_name == "get_total_spent":
         with Session(engine) as session:
-            receipts = session.exec(
-                select(Receipt).where(Receipt.user_id == user_id)
-            ).all()
+            receipts = session.exec(select(Receipt).where(Receipt.user_id == user_id)).all()
             total = sum(r.total for r in receipts)
             return f"Total spent: ${total:.2f} across {len(receipts)} receipts."
-
     if tool_name == "get_needs_review_receipts":
+        with Session(engine) as session:
+            receipts = session.exec(
+                select(Receipt).where(Receipt.user_id == user_id, Receipt.needs_review == True)
+            ).all()
+            if not receipts:
+                return "No receipts need review."
+            lines = [f"{r.vendor} on {r.date}: ${r.total}" for r in receipts]
+            return "\n".join(lines)
+    if tool_name == "search_receipts":
+        keyword = tool_args.get("keyword", "")
         with Session(engine) as session:
             receipts = session.exec(
                 select(Receipt).where(
                     Receipt.user_id == user_id,
-                    Receipt.needs_review == True
+                    Receipt.vendor.ilike(f"%{keyword}%")
                 )
             ).all()
             if not receipts:
-                return "No receipts need review."
-            lines = [f"{r.vendor} on {r.date}: ${r.total} — reason: {r.review_reason}" for r in receipts]
+                return f"No receipts found matching '{keyword}'."
+            lines = [f"{r.vendor} on {r.date}: ${r.total}" for r in receipts]
             return "\n".join(lines)
-
     return f"Unknown tool: {tool_name}"
 
 
@@ -92,7 +110,8 @@ def ask_agent(question: str, user_id: int) -> str:
 
         if part.function_call:
             tool_name = part.function_call.name
-            tool_result = run_tool(tool_name, user_id)
+            tool_args = dict(part.function_call.args) if part.function_call.args else {}
+            tool_result = run_tool(tool_name, user_id, tool_args)
 
             contents.append(types.Content(role="model", parts=[part]))
             contents.append(types.Content(role="user", parts=[
